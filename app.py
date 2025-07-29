@@ -186,7 +186,8 @@ def init_files():
             st.toast(f"Created new {CLIENT_EXPENSES_FILE}")
         else:
             # Basic cleaning for client_expenses.csv
-            df_exp = pd.read_csv(CLIENT_EXPENSES_FILE, keep_default_na=False)
+            # Ensure 'original_transaction_ref_num' and 'expense_person' are read as strings
+            df_exp = pd.read_csv(CLIENT_EXPENSES_FILE, dtype={'original_transaction_ref_num': str, 'expense_person': str}, keep_default_na=False)
             # Ensure relevant columns are strings and amounts are numeric
             for col in ["original_transaction_ref_num", "expense_person", "expense_category", "expense_description"]:
                 if col in df_exp.columns:
@@ -333,8 +334,9 @@ def generate_html_summary(df):
 
         # --- Client Expenses Data for HTML ---
         client_expenses_df_all = pd.DataFrame()
-        if os.path.exists(CLIENT_EXPENSES_FILE) and not pd.read_csv(CLIENT_EXPENSES_FILE).empty:
-            client_expenses_df_all = pd.read_csv(CLIENT_EXPENSES_FILE, keep_default_na=False)
+        # Check if file exists and is not empty before reading
+        if os.path.exists(CLIENT_EXPENSES_FILE) and os.path.getsize(CLIENT_EXPENSES_FILE) > 0:
+            client_expenses_df_all = pd.read_csv(CLIENT_EXPENSES_FILE, dtype={'original_transaction_ref_num': str, 'expense_person': str}, keep_default_na=False)
             client_expenses_df_all['expense_amount'] = pd.to_numeric(client_expenses_df_all['expense_amount'], errors='coerce').fillna(0.0)
             client_expenses_df_all['expense_person'] = client_expenses_df_all['expense_person'].astype(str)
             client_expenses_df_all['expense_date'] = pd.to_datetime(client_expenses_df_all['expense_date'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
@@ -344,8 +346,10 @@ def generate_html_summary(df):
         total_paid_to_clients.rename(columns={'person': 'client_name', 'amount': 'total_paid_to_client'}, inplace=True)
 
         # Calculate total spent by each client (from client_expenses.csv)
-        total_spent_by_clients = client_expenses_df_all.groupby('expense_person')['expense_amount'].sum().reset_index()
-        total_spent_by_clients.rename(columns={'expense_person': 'client_name', 'expense_amount': 'total_spent_by_client'}, inplace=True)
+        total_spent_by_clients = pd.DataFrame() # Initialize as empty
+        if not client_expenses_df_all.empty: # Only group if DataFrame is not empty
+            total_spent_by_clients = client_expenses_df_all.groupby('expense_person')['expense_amount'].sum().reset_index()
+            total_spent_by_clients.rename(columns={'expense_person': 'client_name', 'expense_amount': 'total_spent_by_client'}, inplace=True)
 
         # Merge to get a combined summary for clients
         summary_by_client_df = pd.merge(
@@ -1733,8 +1737,8 @@ with tab3:
 
             # Load existing client expenses to calculate current spent amount
             client_expenses_df = pd.DataFrame()
-            if os.path.exists(CLIENT_EXPENSES_FILE):
-                client_expenses_df = pd.read_csv(CLIENT_EXPENSES_FILE, keep_default_na=False)
+            if os.path.exists(CLIENT_EXPENSES_FILE) and os.path.getsize(CLIENT_EXPENSES_FILE) > 0: # Check if file exists AND is not empty
+                client_expenses_df = pd.read_csv(CLIENT_EXPENSES_FILE, dtype={'original_transaction_ref_num': str, 'expense_person': str}, keep_default_na=False)
                 client_expenses_df['expense_amount'] = pd.to_numeric(client_expenses_df['expense_amount'], errors='coerce').fillna(0.0)
                 client_expenses_df['expense_person'] = client_expenses_df['expense_person'].astype(str)
 
@@ -1782,8 +1786,8 @@ with tab3:
         payments_df_all['type'] = payments_df_all['type'].astype(str).str.lower()
 
         client_expenses_df_all = pd.DataFrame()
-        if os.path.exists(CLIENT_EXPENSES_FILE) and not pd.read_csv(CLIENT_EXPENSES_FILE).empty:
-            client_expenses_df_all = pd.read_csv(CLIENT_EXPENSES_FILE, keep_default_na=False)
+        if os.path.exists(CLIENT_EXPENSES_FILE) and os.path.getsize(CLIENT_EXPENSES_FILE) > 0:
+            client_expenses_df_all = pd.read_csv(CLIENT_EXPENSES_FILE, dtype={'original_transaction_ref_num': str, 'expense_person': str}, keep_default_na=False)
             client_expenses_df_all['expense_amount'] = pd.to_numeric(client_expenses_df_all['expense_amount'], errors='coerce').fillna(0.0)
             client_expenses_df_all['expense_person'] = client_expenses_df_all['expense_person'].astype(str)
             client_expenses_df_all['expense_date'] = pd.to_datetime(client_expenses_df_all['expense_date'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
@@ -1793,8 +1797,10 @@ with tab3:
         total_paid_to_clients.rename(columns={'person': 'client_name', 'amount': 'total_paid_to_client'}, inplace=True)
 
         # Calculate total spent by each client
-        total_spent_by_clients = client_expenses_df_all.groupby('expense_person')['expense_amount'].sum().reset_index()
-        total_spent_by_clients.rename(columns={'expense_person': 'client_name', 'expense_amount': 'total_spent_by_client'}, inplace=True)
+        total_spent_by_clients = pd.DataFrame() # Initialize as empty
+        if not client_expenses_df_all.empty: # Only group if DataFrame is not empty
+            total_spent_by_clients = client_expenses_df_all.groupby('expense_person')['expense_amount'].sum().reset_index()
+            total_spent_by_clients.rename(columns={'expense_person': 'client_name', 'expense_amount': 'total_spent_by_client'}, inplace=True)
 
         # Merge to get a combined summary
         summary_by_client_df = pd.merge(
