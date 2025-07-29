@@ -781,6 +781,30 @@ def generate_html_summary(df):
         .client-summary-table .positive-balance {{ color: #28a745; font-weight: 600; }}
         .client-summary-table .negative-balance {{ color: #dc3545; font-weight: 600; }}
 
+        .download-button-container {{
+            text-align: right;
+            margin-bottom: 20px;
+        }}
+        .download-button {{
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+        }}
+        .download-button i {{
+            margin-right: 8px;
+        }}
+        .download-button:hover {{
+            background-color: #218838;
+            transform: translateY(-2px);
+        }}
 
         /* Responsive adjustments */
         @media (max-width: 768px) {{
@@ -851,6 +875,65 @@ def generate_html_summary(df):
             .detailed-expenses-table td:nth-of-type(3):before {{ content: "Category"; }}
             .detailed-expenses-table td:nth-of-type(4):before {{ content: "Amount"; }}
             .detailed-expenses-table td:nth-of-type(5):before {{ content: "Description"; }}
+        }}
+
+        /* Print-specific styles */
+        @media print {{
+            body {{
+                background-color: #fff;
+                margin: 0;
+                padding: 0;
+            }}
+            .container {{
+                box-shadow: none;
+                border-radius: 0;
+                margin: 0;
+                padding: 0;
+                max-width: none;
+            }}
+            header, .summary-cards, .filters, .tabs, .tab-buttons, .tab-content {{
+                box-shadow: none !important;
+                border: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }}
+            .tab-button, .tab-pane {{
+                display: block !important; /* Show all tabs for printing */
+                width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background-color: #fff !important;
+                border: none !important;
+            }}
+            .tab-buttons {{
+                display: none; /* Hide tab navigation buttons */
+            }}
+            .tab-pane.active {{
+                display: block;
+            }}
+            .download-button-container, .footer {{
+                display: none; /* Hide download button and footer in print */
+            }}
+            table {{
+                box-shadow: none;
+                border-radius: 0;
+                margin-bottom: 20px;
+            }}
+            th, td {{
+                border: 1px solid #ddd; /* Ensure borders appear in print */
+                padding: 8px;
+            }}
+            .no-results {{
+                display: none; /* Hide no results message in print */
+            }}
+            /* Ensure section titles and subtitles print clearly */
+            .section-title, .section-subtitle {{
+                page-break-after: avoid;
+                margin-top: 20px;
+                margin-bottom: 10px;
+                padding-bottom: 5px;
+                border-bottom: 1px solid #ccc;
+            }}
         }}
     </style>
     <script>
@@ -958,6 +1041,10 @@ def generate_html_summary(df):
             $('#end-date').val(today.toISOString().split('T')[0]);
             
             applyFilters(); // Apply filters after resetting
+        }}
+
+        function downloadPdf() {{
+            window.print();
         }}
     </script>
 </head>
@@ -1162,6 +1249,11 @@ def generate_html_summary(df):
                 </div>
 
                 <div id="client-expenses-tab" class="tab-pane">
+                    <div class="download-button-container">
+                        <button class="download-button" onclick="downloadPdf()">
+                            <i class="fas fa-file-pdf"></i> Download as PDF
+                        </button>
+                    </div>
                     <h2 class="section-title">
                         <i class="fas fa-money-check-alt"></i> Client Expenses Overview
                     </h2>
