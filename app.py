@@ -255,7 +255,7 @@ def prepare_dataframe_for_display(df):
     df_display['amount_display'] = df_display['amount'].apply(lambda x: f"Rs. {x:,.2f}")
 
     # Robust Date Formatting:
-    df_display['date_parsed'] = pd.to_datetime(df_display['date'], errors='coerce')
+    df_display['date_parsed'] = pd.to_datetime(df['date'], errors='coerce')
     df_display['formatted_date'] = df_display['date_parsed'].dt.strftime('%Y-%m-%d').fillna('')
 
     # Robust Cheque Status Display:
@@ -1273,14 +1273,15 @@ def generate_html_summary(df):
 
         # Save the HTML file
         st.info(f"Attempting to save HTML to: `{SUMMARY_FILE}`")
+        st.info(f"Length of HTML content to write: {len(html)} bytes.") # New diagnostic
         try:
             os.makedirs(os.path.dirname(SUMMARY_FILE), exist_ok=True)
             with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
                 f.write(html)
-            st.success("HTML summary generated successfully!")
+            st.success("HTML content written to file successfully!") # More specific message
             # Verify file existence and size
             if os.path.exists(SUMMARY_FILE):
-                st.info(f"File `{SUMMARY_FILE}` exists. Size: {os.path.getsize(SUMMARY_FILE)} bytes.")
+                st.info(f"File `{SUMMARY_FILE}` exists. Final size: {os.path.getsize(SUMMARY_FILE)} bytes.")
             else:
                 st.error(f"File `{SUMMARY_FILE}` was not found after writing attempt.")
             return True
