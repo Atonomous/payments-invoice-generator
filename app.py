@@ -52,7 +52,7 @@ CSV_FILE = os.path.join(REPO_PATH, "payments.csv")
 PEOPLE_FILE = os.path.join(REPO_PATH, "people.csv")
 CLIENT_EXPENSES_FILE = os.path.join(REPO_PATH, "client_expenses.csv") # New file for client expenses
 SUMMARY_FILE = os.path.join(REPO_PATH, "docs/index.html")
-SUMMARY_URL = "https://atonomous.github.io/payments-summary/"
+SUMMARY_URL = "https://atonomous.github.io/payments-invoice-generator/" # CORRECTED URL
 
 # Define valid status lists globally so they are accessible everywhere
 valid_cheque_statuses_lower = ["received/given", "processing", "bounced", "processing done"]
