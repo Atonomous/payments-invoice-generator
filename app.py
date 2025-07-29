@@ -15,7 +15,9 @@ def init_state():
     keys = [
         'selected_transaction_type', 'payment_method', 'editing_row_idx', 'selected_person', 'reset_add_form',
         'add_amount', 'add_date', 'add_reference_number', 'add_cheque_status', 'add_status', 'add_description',
-        'temp_edit_data' # Ensure temp_edit_data is initialized
+        'temp_edit_data', # Ensure temp_edit_data is initialized
+        'selected_client_for_expense', 'add_client_expense_amount', 'add_client_expense_date',
+        'add_client_expense_category', 'add_client_expense_description', 'reset_client_expense_form'
     ]
     defaults = {
         'selected_transaction_type': 'Paid to Me',
@@ -29,7 +31,13 @@ def init_state():
         'add_cheque_status': 'received/given',
         'add_status': 'completed',
         'add_description': '',
-        'temp_edit_data': {} # Initialize as empty dict
+        'temp_edit_data': {}, # Initialize as empty dict
+        'selected_client_for_expense': "Select...", # Changed from selected_client_expense_ref
+        'add_client_expense_amount': None,
+        'add_client_expense_date': None,
+        'add_client_expense_category': 'General',
+        'add_client_expense_description': '',
+        'reset_client_expense_form': False
     }
     for k in keys:
         if k not in st.session_state:
@@ -42,12 +50,14 @@ init_state() # Call init_state here, before any st. commands that might trigger 
 REPO_PATH = os.getcwd()
 CSV_FILE = os.path.join(REPO_PATH, "payments.csv")
 PEOPLE_FILE = os.path.join(REPO_PATH, "people.csv")
+CLIENT_EXPENSES_FILE = os.path.join(REPO_PATH, "client_expenses.csv") # New file for client expenses
 SUMMARY_FILE = os.path.join(REPO_PATH, "docs/index.html")
 SUMMARY_URL = "https://atonomous.github.io/payments-summary/"
 
 # Define valid status lists globally so they are accessible everywhere
 valid_cheque_statuses_lower = ["received/given", "processing", "bounced", "processing done"]
 valid_transaction_statuses_lower = ["completed", "pending"]
+valid_expense_categories = ["General", "Salaries", "Rent", "Utilities", "Supplies", "Travel", "Other"]
 
 def clean_payments_data(df):
     """
@@ -118,7 +128,7 @@ def clean_payments_data(df):
 
 def init_files():
     """
-    Initializes payments.csv and people.csv if they don't exist.
+    Initializes payments.csv, people.csv, and client_expenses.csv if they don't exist.
     Also handles migration of old column names and ensures 'category' in people.csv.
     Crucially, it now cleans the payments data upon load.
     """
@@ -166,6 +176,29 @@ def init_files():
                 df.to_csv(PEOPLE_FILE, index=False)
             df['name'] = df['name'].astype(str) # Ensure name is string
             df.to_csv(PEOPLE_FILE, index=False) # Save back
+
+        # Initialize client_expenses.csv if it doesn't exist
+        if not os.path.exists(CLIENT_EXPENSES_FILE):
+            pd.DataFrame(columns=[
+                "original_transaction_ref_num", "expense_date", "expense_person",
+                "expense_category", "expense_amount", "expense_description"
+            ]).to_csv(CLIENT_EXPENSES_FILE, index=False)
+            st.toast(f"Created new {CLIENT_EXPENSES_FILE}")
+        else:
+            # Basic cleaning for client_expenses.csv
+            df_exp = pd.read_csv(CLIENT_EXPENSES_FILE, keep_default_na=False)
+            # Ensure relevant columns are strings and amounts are numeric
+            for col in ["original_transaction_ref_num", "expense_person", "expense_category", "expense_description"]:
+                if col in df_exp.columns:
+                    df_exp[col] = df_exp[col].astype(str).replace('nan', '').replace('None', '').str.strip()
+            if 'expense_amount' in df_exp.columns:
+                df_exp['expense_amount'] = pd.to_numeric(df_exp['expense_amount'], errors='coerce').fillna(0.0)
+            if 'expense_date' in df_exp.columns:
+                df_exp['expense_date'] = pd.to_datetime(df_exp['expense_date'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
+            df_exp.to_csv(CLIENT_EXPENSES_FILE, index=False)
+            st.toast("Client expenses data cleaned and saved.")
+
+
     except Exception as e:
         st.error(f"Error initializing files: {e}")
 
@@ -297,6 +330,100 @@ def generate_html_summary(df):
         # Read people data for filters
         people_df = pd.read_csv(PEOPLE_FILE)
         person_options_html = ''.join(f'<option value="{name}">{name}</option>' for name in sorted(people_df['name'].unique()))
+
+        # --- Client Expenses Data for HTML ---
+        client_expenses_df_all = pd.DataFrame()
+        if os.path.exists(CLIENT_EXPENSES_FILE) and not pd.read_csv(CLIENT_EXPENSES_FILE).empty:
+            client_expenses_df_all = pd.read_csv(CLIENT_EXPENSES_FILE, keep_default_na=False)
+            client_expenses_df_all['expense_amount'] = pd.to_numeric(client_expenses_df_all['expense_amount'], errors='coerce').fillna(0.0)
+            client_expenses_df_all['expense_person'] = client_expenses_df_all['expense_person'].astype(str)
+            client_expenses_df_all['expense_date'] = pd.to_datetime(client_expenses_df_all['expense_date'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
+        
+        # Calculate total paid to each client (from payments.csv)
+        total_paid_to_clients = df_for_totals[df_for_totals['type'] == 'i_paid'].groupby('person')['amount'].sum().reset_index()
+        total_paid_to_clients.rename(columns={'person': 'client_name', 'amount': 'total_paid_to_client'}, inplace=True)
+
+        # Calculate total spent by each client (from client_expenses.csv)
+        total_spent_by_clients = client_expenses_df_all.groupby('expense_person')['expense_amount'].sum().reset_index()
+        total_spent_by_clients.rename(columns={'expense_person': 'client_name', 'expense_amount': 'total_spent_by_client'}, inplace=True)
+
+        # Merge to get a combined summary for clients
+        summary_by_client_df = pd.merge(
+            total_paid_to_clients,
+            total_spent_by_clients,
+            on='client_name',
+            how='outer' # Use outer to include clients even if no payments or no expenses
+        ).fillna(0) # Fill NaN with 0 for clients with no payments or no expenses
+
+        summary_by_client_df['remaining_balance'] = summary_by_client_df['total_paid_to_client'] - summary_by_client_df['total_spent_by_client']
+
+        # Generate HTML for Client Spending Overview Table
+        client_overview_html = ""
+        if not summary_by_client_df.empty:
+            client_overview_html += """
+            <h3 class="section-subtitle"><i class="fas fa-chart-pie"></i> Spending Overview by Client</h3>
+            <table class="client-summary-table">
+                <thead>
+                    <tr>
+                        <th>Client Name</th>
+                        <th>Total Paid to Client</th>
+                        <th>Total Spent by Client</th>
+                        <th>Remaining Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+            """
+            for idx, row in summary_by_client_df.iterrows():
+                balance_class = 'positive-balance' if row['remaining_balance'] >= 0 else 'negative-balance'
+                client_overview_html += f"""
+                    <tr>
+                        <td>{row['client_name']}</td>
+                        <td>Rs. {row['total_paid_to_client']:,.2f}</td>
+                        <td>Rs. {row['total_spent_by_client']:,.2f}</td>
+                        <td class="{balance_class}">Rs. {row['remaining_balance']:,.2f}</td>
+                    </tr>
+                """
+            client_overview_html += """
+                </tbody>
+            </table>
+            """
+        else:
+            client_overview_html = "<p class='no-results'>No client spending overview available yet.</p>"
+
+        # Generate HTML for Detailed Client Expenses Table
+        detailed_expenses_html = ""
+        if not client_expenses_df_all.empty:
+            detailed_expenses_html += """
+            <h3 class="section-subtitle"><i class="fas fa-list-alt"></i> Detailed Client Expenses</h3>
+            <table class="detailed-expenses-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Client Name</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+            """
+            for idx, row in client_expenses_df_all.iterrows():
+                detailed_expenses_html += f"""
+                    <tr>
+                        <td>{row['expense_date']}</td>
+                        <td>{row['expense_person']}</td>
+                        <td>{row['expense_category']}</td>
+                        <td>Rs. {row['expense_amount']:,.2f}</td>
+                        <td>{row['expense_description'] if row['expense_description'] else '-'}</td>
+                    </tr>
+                """
+            detailed_expenses_html += """
+                </tbody>
+            </table>
+            """
+        else:
+            detailed_expenses_html = "<p class='no-results'>No detailed client expenses to display yet.</p>"
+
 
         # Generate HTML with premium styling and filters
         html = f"""<!DOCTYPE html>
@@ -436,6 +563,21 @@ def generate_html_summary(df):
             margin-right: 10px;
             color: #007bff;
         }}
+        .section-subtitle {{ /* New style for sub-headings within tabs */
+            font-size: 1.3em;
+            color: #34495e;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }}
+        .section-subtitle i {{
+            margin-right: 8px;
+            color: #28a745; /* Green for client expenses */
+        }}
+
 
         .filters {{
             background-color: #fdfdfd;
@@ -580,6 +722,62 @@ def generate_html_summary(df):
             color: #95a5a6;
         }}
 
+        /* New Tab Styles */
+        .tabs {{
+            margin-top: 30px;
+            margin-bottom: 40px;
+        }}
+        .tab-buttons {{
+            display: flex;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 20px;
+        }}
+        .tab-button {{
+            padding: 12px 25px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 500;
+            color: #555;
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            margin-right: 5px;
+            transition: all 0.3s ease;
+        }}
+        .tab-button:hover {{
+            background-color: #eee;
+            color: #333;
+        }}
+        .tab-button.active {{
+            background-color: #ffffff;
+            color: #007bff;
+            border-color: #007bff;
+            border-bottom: 2px solid #ffffff; /* Overlap the bottom border of the tab-buttons */
+            transform: translateY(2px);
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+            z-index: 1;
+        }}
+        .tab-content {{
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+            position: relative;
+            top: -2px; /* Align with tab buttons */
+        }}
+        .tab-pane {{
+            display: none;
+        }}
+        .tab-pane.active {{
+            display: block;
+        }}
+
+        .client-summary-table .positive-balance {{ color: #28a745; font-weight: 600; }}
+        .client-summary-table .negative-balance {{ color: #dc3545; font-weight: 600; }}
+
+
         /* Responsive adjustments */
         @media (max-width: 768px) {{
             .summary-cards {{
@@ -637,6 +835,18 @@ def generate_html_summary(df):
             td:nth-of-type(7):before {{ content: "Reference No."; }}
             td:nth-of-type(8):before {{ content: "Status"; }}
             td:nth-of-type(9):before {{ content: "Description"; }}
+
+            /* Client Expenses Table labels for mobile */
+            .client-summary-table td:nth-of-type(1):before {{ content: "Client Name"; }}
+            .client-summary-table td:nth-of-type(2):before {{ content: "Total Paid"; }}
+            .client-summary-table td:nth-of-type(3):before {{ content: "Total Spent"; }}
+            .client-summary-table td:nth-of-type(4):before {{ content: "Balance"; }}
+
+            .detailed-expenses-table td:nth-of-type(1):before {{ content: "Date"; }}
+            .detailed-expenses-table td:nth-of-type(2):before {{ content: "Client Name"; }}
+            .detailed-expenses-table td:nth-of-type(3):before {{ content: "Category"; }}
+            .detailed-expenses-table td:nth-of-type(4):before {{ content: "Amount"; }}
+            .detailed-expenses-table td:nth-of-type(5):before {{ content: "Description"; }}
         }}
     </style>
     <script>
@@ -649,6 +859,18 @@ def generate_html_summary(df):
             $('#end-date').val(today.toISOString().split('T')[0]);
 
             applyFilters(); // Apply filters immediately on page load with default dates
+
+            // Tab functionality
+            $('.tab-button').on('click', function() {{
+                const tabId = $(this).data('tab');
+                $('.tab-button').removeClass('active');
+                $(this).addClass('active');
+                $('.tab-pane').removeClass('active');
+                $('#' + tabId).addClass('active');
+            }});
+
+            // Activate the first tab by default
+            $('.tab-button[data-tab="transactions-tab"]').click();
         }});
 
         function applyFilters() {{
@@ -864,30 +1086,41 @@ def generate_html_summary(df):
             </div>
         </div>
 
-        <h2 class="section-title">
-            <i class="fas fa-list"></i> All Transactions
-        </h2>
+        <div class="tabs">
+            <div class="tab-buttons">
+                <button class="tab-button" data-tab="transactions-tab">
+                    <i class="fas fa-list"></i> All Transactions
+                </button>
+                <button class="tab-button" data-tab="client-expenses-tab">
+                    <i class="fas fa-money-check-alt"></i> Client Expenses
+                </button>
+            </div>
 
-        <div class="no-results" id="no-results">
-            <i class="fas fa-search" style="font-size: 24px; margin-bottom: 10px;"></i>
-            <p>No transactions match your filters</p>
-        </div>
+            <div class="tab-content">
+                <div id="transactions-tab" class="tab-pane">
+                    <h2 class="section-title">
+                        <i class="fas fa-list"></i> All Transactions
+                    </h2>
+                    <div class="no-results" id="no-results">
+                        <i class="fas fa-search" style="font-size: 24px; margin-bottom: 10px;"></i>
+                        <p>No transactions match your filters</p>
+                    </div>
 
-        <table id="transactions-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Person</th>
-                    <th>Amount</th>
-                    <th>Type</th>
-                    <th>Method</th>
-                    <th>Cheque Status</th>
-                    <th>Reference No.</th>
-                    <th>Status</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>"""
+                    <table id="transactions-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Person</th>
+                                <th>Amount</th>
+                                <th>Type</th>
+                                <th>Method</th>
+                                <th>Cheque Status</th>
+                                <th>Reference No.</th>
+                                <th>Status</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>"""
 
         # Add transaction rows with correct column data using the original, cleaned DataFrame for data attributes
         for idx, row in df.iterrows(): # Use 'df' directly for data attributes
@@ -903,25 +1136,36 @@ def generate_html_summary(df):
             status_class = str(transactions_display.loc[idx, 'transaction_status_display']).lower().replace(' ', '-') if transactions_display.loc[idx, 'transaction_status_display'] != '-' else ''
 
             html += f"""
-                <tr data-date="{row_date}"
-                    data-person="{row_person}"
-                    data-type="{row_type}"
-                    data-method="{row_method}"
-                    data-cheque-status="{row_cheque_status}">
-                    <td>{transactions_display.loc[idx, 'formatted_date']}</td>
-                    <td>{transactions_display.loc[idx, 'person']}</td>
-                    <td>{transactions_display.loc[idx, 'amount_display']}</td>
-                    <td>{transactions_display.loc[idx, 'type_display']}</td>
-                    <td>{str(transactions_display.loc[idx, 'payment_method']).capitalize()}</td>
-                    <td><span class="status {cheque_status_class}">{transactions_display.loc[idx, 'cheque_status_display']}</span></td>
-                    <td>{transactions_display.loc[idx, 'reference_number_display']}</td>
-                    <td><span class="status {status_class}">{transactions_display.loc[idx, 'transaction_status_display']}</span></td>
-                    <td>{transactions_display.loc[idx, 'description'] if transactions_display.loc[idx, 'description'] else '-'}</td>
-                </tr>"""
+                            <tr data-date="{row_date}"
+                                data-person="{row_person}"
+                                data-type="{row_type}"
+                                data-method="{row_method}"
+                                data-cheque-status="{row_cheque_status}">
+                                <td>{transactions_display.loc[idx, 'formatted_date']}</td>
+                                <td>{transactions_display.loc[idx, 'person']}</td>
+                                <td>{transactions_display.loc[idx, 'amount_display']}</td>
+                                <td>{transactions_display.loc[idx, 'type_display']}</td>
+                                <td>{str(transactions_display.loc[idx, 'payment_method']).capitalize()}</td>
+                                <td><span class="status {cheque_status_class}">{transactions_display.loc[idx, 'cheque_status_display']}</span></td>
+                                <td>{transactions_display.loc[idx, 'reference_number_display']}</td>
+                                <td><span class="status {status_class}">{transactions_display.loc[idx, 'transaction_status_display']}</span></td>
+                                <td>{transactions_display.loc[idx, 'description'] if transactions_display.loc[idx, 'description'] else '-'}</td>
+                            </tr>"""
 
-        html += """
-            </tbody>
-        </table>
+        html += f"""
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="client-expenses-tab" class="tab-pane">
+                    <h2 class="section-title">
+                        <i class="fas fa-money-check-alt"></i> Client Expenses Overview
+                    </h2>
+                    {client_overview_html}
+                    {detailed_expenses_html}
+                </div>
+            </div>
+        </div>
 
         <div class="footer">
             <p><i class="fas fa-file-alt"></i> This report was automatically generated by Payment Tracker System</p>
@@ -960,12 +1204,25 @@ def reset_form_session_state_for_add_transaction():
     st.session_state['add_status'] = 'completed'
     st.session_state['add_description'] = ''
 
+def reset_form_session_state_for_add_client_expense():
+    """Resets session state variables for the 'Add Client Expense' form."""
+    st.session_state['selected_client_for_expense'] = "Select..." # Changed from selected_client_expense_ref
+    st.session_state['add_client_expense_amount'] = None
+    st.session_state['add_client_expense_date'] = None
+    st.session_state['add_client_expense_category'] = 'General'
+    st.session_state['add_client_expense_description'] = ''
+
 # Handle form reset at the beginning of the rerun, if flagged
 if st.session_state.get('reset_add_form', False):
     reset_form_session_state_for_add_transaction()
     st.session_state['reset_add_form'] = False # Reset the flag immediately after handling
 
-tab1, tab2, tab3 = st.tabs(["Add Transaction", "View Transactions", "Manage People"])
+if st.session_state.get('reset_client_expense_form', False):
+    reset_form_session_state_for_add_client_expense()
+    st.session_state['reset_client_expense_form'] = False # Reset the flag immediately after handling
+
+
+tab1, tab2, tab3, tab4 = st.tabs(["Add Transaction", "View Transactions", "Track Client Expenses", "Manage People"])
 
 # ------------------ Tab 1: Add Transaction ------------------
 with tab1:
@@ -1056,13 +1313,31 @@ with tab1:
             if amount <= 0:
                 st.warning("Amount must be greater than 0.")
                 validation_passed = False
-            if not str(reference_number).strip(): # Use str() to handle potential None/NaN from widget
+            
+            # Normalize reference number for validation
+            normalized_reference_number = str(reference_number).strip()
+
+            if not normalized_reference_number: # Use normalized_reference_number for emptiness check
                 if st.session_state['payment_method'] == "cheque":
                     st.warning(f"🚨 Reference Number is **REQUIRED** for cheque transactions.")
                 else:
                     st.warning(f"🚨 Reference Number is required.")
                 validation_passed = False
             
+            # Check for duplicate reference number
+            try:
+                existing_df = pd.read_csv(CSV_FILE, dtype={'reference_number': str}, keep_default_na=False)
+                existing_df['reference_number'] = existing_df['reference_number'].apply(
+                    lambda x: '' if pd.isna(x) or str(x).strip().lower() == 'nan' or str(x).strip().lower() == 'none' else str(x).strip()
+                )
+                if not existing_df.empty and normalized_reference_number in existing_df['reference_number'].values:
+                    st.warning(f"🚨 Duplicate Reference Number found: '{normalized_reference_number}'. Please use a unique reference number.")
+                    validation_passed = False
+            except Exception as e:
+                st.error(f"Error checking for duplicate reference numbers: {e}")
+                validation_passed = False
+
+
             if validation_passed:
                 try:
                     new_row = {
@@ -1073,7 +1348,7 @@ with tab1:
                         "status": status, # This 'status' column is redundant with 'transaction_status' but kept for compatibility
                         "description": description,
                         "payment_method": st.session_state['payment_method'],
-                        "reference_number": str(reference_number).strip(), # Explicitly cast to string before saving
+                        "reference_number": normalized_reference_number, # Use normalized value
                         "cheque_status": cheque_status_val if st.session_state['payment_method'] == "cheque" else None,
                         "transaction_status": status # Use the selected status for transaction_status
                     }
@@ -1303,13 +1578,33 @@ with tab2:
                     if edited_amount <= 0:
                         st.warning("Amount must be greater than 0.")
                         validation_passed = False
-                    if not str(edited_reference_number).strip(): # Use str() to handle potential None/NaN from widget
+                    
+                    # Normalize reference number for validation
+                    normalized_edited_reference_number = str(edited_reference_number).strip()
+
+                    if not normalized_edited_reference_number: # Use normalized_edited_reference_number for emptiness check
                         if edited_payment_method == "cheque":
                             st.warning(f"🚨 Reference Number is **REQUIRED** for cheque transactions.")
                         else:
                             st.warning(f"🚨 Reference Number is required.")
                         validation_passed = False
                     
+                    # Check for duplicate reference number (excluding the current transaction being edited)
+                    try:
+                        existing_df = pd.read_csv(CSV_FILE, dtype={'reference_number': str}, keep_default_na=False)
+                        existing_df['reference_number'] = existing_df['reference_number'].apply(
+                            lambda x: '' if pd.isna(x) or str(x).strip().lower() == 'nan' or str(x).strip().lower() == 'none' else str(x).strip()
+                        )
+                        # Filter out the current row being edited
+                        other_transactions = existing_df.drop(st.session_state['editing_row_idx'], errors='ignore')
+                        
+                        if not other_transactions.empty and normalized_edited_reference_number in other_transactions['reference_number'].values:
+                            st.warning(f"🚨 Duplicate Reference Number found: '{normalized_edited_reference_number}'. Please use a unique reference number.")
+                            validation_passed = False
+                    except Exception as e:
+                        st.error(f"Error checking for duplicate reference numbers during edit: {e}")
+                        validation_passed = False
+
                     if validation_passed:
                         try:
                             df.loc[st.session_state['editing_row_idx']] = {
@@ -1320,7 +1615,7 @@ with tab2:
                                 "status": edited_transaction_status, # Update 'status' column (redundant but kept)
                                 "description": edited_description,
                                 "payment_method": edited_payment_method,
-                                "reference_number": str(edited_reference_number).strip(), # Explicitly cast to string
+                                "reference_number": normalized_edited_reference_number, # Use normalized value
                                 "cheque_status": edited_cheque_status, # Will be None for cash
                                 "transaction_status": edited_transaction_status # Update 'transaction_status' column
                             }
@@ -1351,8 +1646,199 @@ with tab2:
             st.error(f"Error loading transaction history: {str(e)}")
             
 
-# ------------------ Tab 3: Manage People ------------------
+# ------------------ Tab 3: Track Client Expenses ------------------
 with tab3:
+    st.subheader("Track Client Expenses")
+
+    # Load people data to get 'client' category people
+    try:
+        people_df_for_expenses = pd.read_csv(PEOPLE_FILE)
+        client_people = people_df_for_expenses[people_df_for_expenses['category'] == 'client']['name'].astype(str).tolist()
+        client_options = ["Select..."] + sorted(client_people)
+        
+        # Get the current index for the selectbox
+        current_client_index = 0
+        if st.session_state['selected_client_for_expense'] in client_options:
+            current_client_index = client_options.index(st.session_state['selected_client_for_expense'])
+
+    except Exception as e:
+        st.error(f"Error loading client data for expenses: {e}")
+        client_options = ["Select..."]
+        current_client_index = 0
+        client_people = [] # Ensure it's an empty list on error
+
+    with st.form("client_expense_form", clear_on_submit=False):
+        st.session_state['selected_client_for_expense'] = st.selectbox(
+            "Select Client",
+            client_options,
+            index=current_client_index,
+            key='selected_client_for_expense_select'
+        )
+
+        col1_exp, col2_exp = st.columns(2)
+        with col1_exp:
+            expense_amount_value = st.session_state['add_client_expense_amount']
+            if expense_amount_value is None:
+                expense_amount = st.number_input("Expense Amount (Rs.)", min_value=0.0, format="%.2f", key='add_client_expense_amount')
+            else:
+                expense_amount = st.number_input("Expense Amount (Rs.)", min_value=0.0, format="%.2f", value=float(expense_amount_value), key='add_client_expense_amount')
+
+            expense_date_value = st.session_state['add_client_expense_date']
+            if expense_date_value is None:
+                expense_date = st.date_input("Expense Date", key='add_client_expense_date')
+            else:
+                expense_date = st.date_input("Expense Date", value=expense_date_value, key='add_client_expense_date')
+
+        with col2_exp:
+            expense_category = st.selectbox(
+                "Expense Category",
+                valid_expense_categories,
+                index=valid_expense_categories.index(st.session_state['add_client_expense_category']),
+                key='add_client_expense_category'
+            )
+            expense_description = st.text_input(
+                "Expense Description",
+                value=st.session_state['add_client_expense_description'],
+                key='add_client_expense_description'
+            )
+        
+        submitted_expense = st.form_submit_button("Add Client Expense")
+
+        if submitted_expense:
+            expense_validation_passed = True
+            selected_client_final_for_expense = None
+
+            if st.session_state['selected_client_for_expense'] == "Select...":
+                st.warning("Please select a client.")
+                expense_validation_passed = False
+            else:
+                selected_client_final_for_expense = st.session_state['selected_client_for_expense']
+
+            if expense_amount <= 0:
+                st.warning("Expense amount must be greater than 0.")
+                expense_validation_passed = False
+            
+            # Load payments data to get total paid to this client
+            payments_df_for_balance = pd.DataFrame()
+            if os.path.exists(CSV_FILE):
+                payments_df_for_balance = pd.read_csv(CSV_FILE, dtype={'reference_number': str}, keep_default_na=False)
+                payments_df_for_balance['amount'] = pd.to_numeric(payments_df_for_balance['amount'], errors='coerce').fillna(0.0)
+                payments_df_for_balance['person'] = payments_df_for_balance['person'].astype(str)
+                payments_df_for_balance['type'] = payments_df_for_balance['type'].astype(str).str.lower()
+
+            total_paid_to_this_client = payments_df_for_balance[
+                (payments_df_for_balance['type'] == 'i_paid') & 
+                (payments_df_for_balance['person'] == selected_client_final_for_expense)
+            ]['amount'].sum()
+
+            # Load existing client expenses to calculate current spent amount
+            client_expenses_df = pd.DataFrame()
+            if os.path.exists(CLIENT_EXPENSES_FILE):
+                client_expenses_df = pd.read_csv(CLIENT_EXPENSES_FILE, keep_default_na=False)
+                client_expenses_df['expense_amount'] = pd.to_numeric(client_expenses_df['expense_amount'], errors='coerce').fillna(0.0)
+                client_expenses_df['expense_person'] = client_expenses_df['expense_person'].astype(str)
+
+            spent_by_this_client = client_expenses_df[
+                client_expenses_df['expense_person'] == selected_client_final_for_expense
+            ]['expense_amount'].sum()
+
+            if (spent_by_this_client + expense_amount) > total_paid_to_this_client:
+                st.warning(f"🚨 Total reported expenses (Rs. {spent_by_this_client + expense_amount:,.2f}) for {selected_client_final_for_expense} exceed the total amount paid to them (Rs. {total_paid_to_this_client:,.2f}). Remaining to be accounted for: Rs. {total_paid_to_this_client - spent_by_this_client:,.2f}")
+                expense_validation_passed = False
+            
+            if total_paid_to_this_client == 0:
+                st.warning(f"No money has been recorded as 'Paid to' {selected_client_final_for_expense} yet. Please add a corresponding 'I Paid' transaction first.")
+                expense_validation_passed = False
+
+            if expense_validation_passed:
+                try:
+                    new_expense_row = {
+                        "original_transaction_ref_num": "", # No specific transaction link in this simplified flow
+                        "expense_date": expense_date.strftime("%Y-%m-%d"),
+                        "expense_person": selected_client_final_for_expense,
+                        "expense_category": expense_category,
+                        "expense_amount": expense_amount,
+                        "expense_description": expense_description
+                    }
+                    pd.DataFrame([new_expense_row]).to_csv(CLIENT_EXPENSES_FILE, mode='a', header=False, index=False)
+                    st.success("Client expense added successfully!")
+                    
+                    # Trigger git push to sync client_expenses.csv
+                    git_push()
+
+                    st.session_state['reset_client_expense_form'] = True
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error saving client expense: {e}")
+
+    st.markdown("---")
+    st.subheader("Client Expense Summary")
+
+    try:
+        # Load all payments and client expenses
+        payments_df_all = pd.read_csv(CSV_FILE, dtype={'reference_number': str}, keep_default_na=False)
+        payments_df_all['amount'] = pd.to_numeric(payments_df_all['amount'], errors='coerce').fillna(0.0)
+        payments_df_all['person'] = payments_df_all['person'].astype(str)
+        payments_df_all['type'] = payments_df_all['type'].astype(str).str.lower()
+
+        client_expenses_df_all = pd.DataFrame()
+        if os.path.exists(CLIENT_EXPENSES_FILE) and not pd.read_csv(CLIENT_EXPENSES_FILE).empty:
+            client_expenses_df_all = pd.read_csv(CLIENT_EXPENSES_FILE, keep_default_na=False)
+            client_expenses_df_all['expense_amount'] = pd.to_numeric(client_expenses_df_all['expense_amount'], errors='coerce').fillna(0.0)
+            client_expenses_df_all['expense_person'] = client_expenses_df_all['expense_person'].astype(str)
+            client_expenses_df_all['expense_date'] = pd.to_datetime(client_expenses_df_all['expense_date'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
+        
+        # Calculate total paid to each client
+        total_paid_to_clients = payments_df_all[payments_df_all['type'] == 'i_paid'].groupby('person')['amount'].sum().reset_index()
+        total_paid_to_clients.rename(columns={'person': 'client_name', 'amount': 'total_paid_to_client'}, inplace=True)
+
+        # Calculate total spent by each client
+        total_spent_by_clients = client_expenses_df_all.groupby('expense_person')['expense_amount'].sum().reset_index()
+        total_spent_by_clients.rename(columns={'expense_person': 'client_name', 'expense_amount': 'total_spent_by_client'}, inplace=True)
+
+        # Merge to get a combined summary
+        summary_by_client_df = pd.merge(
+            total_paid_to_clients,
+            total_spent_by_clients,
+            on='client_name',
+            how='outer' # Use outer to include clients even if no payments or no expenses
+        ).fillna(0) # Fill NaN with 0 for clients with no payments or no expenses
+
+        summary_by_client_df['remaining_balance'] = summary_by_client_df['total_paid_to_client'] - summary_by_client_df['total_spent_by_client']
+
+        if not summary_by_client_df.empty:
+            st.write("#### Spending Overview by Client")
+            st.dataframe(
+                summary_by_client_df[[
+                    'client_name', 'total_paid_to_client', 'total_spent_by_client', 'remaining_balance'
+                ]].style.format({
+                    'total_paid_to_client': "Rs. {:,.2f}",
+                    'total_spent_by_client': "Rs. {:,.2f}",
+                    'remaining_balance': "Rs. {:,.2f}"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.write("#### Detailed Client Expenses")
+            if not client_expenses_df_all.empty:
+                st.dataframe(
+                    client_expenses_df_all[[
+                        'expense_date', 'expense_person', 'expense_category', 'expense_amount', 'expense_description'
+                    ]].style.format({'expense_amount': "Rs. {:,.2f}"}),
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("No detailed client expenses to display.")
+        else:
+            st.info("No client expenses or 'I Paid' transactions recorded yet.")
+    except Exception as e:
+        st.error(f"Error loading client expenses summary: {e}")
+
+
+# ------------------ Tab 4: Manage People ------------------
+with tab4:
     st.subheader("Manage People")
     with st.expander("Add New Person"):
         with st.form("person_form", clear_on_submit=True):
