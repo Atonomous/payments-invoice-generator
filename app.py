@@ -1272,11 +1272,21 @@ def generate_html_summary(df):
 </html>"""
 
         # Save the HTML file
-        os.makedirs(os.path.dirname(SUMMARY_FILE), exist_ok=True)
-        with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
-            f.write(html)
-        st.toast("HTML summary generated successfully!")
-        return True
+        st.info(f"Attempting to save HTML to: `{SUMMARY_FILE}`")
+        try:
+            os.makedirs(os.path.dirname(SUMMARY_FILE), exist_ok=True)
+            with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
+                f.write(html)
+            st.success("HTML summary generated successfully!")
+            # Verify file existence and size
+            if os.path.exists(SUMMARY_FILE):
+                st.info(f"File `{SUMMARY_FILE}` exists. Size: {os.path.getsize(SUMMARY_FILE)} bytes.")
+            else:
+                st.error(f"File `{SUMMARY_FILE}` was not found after writing attempt.")
+            return True
+        except Exception as e:
+            st.error(f"Error writing HTML file to disk: {e}")
+            return False
     except Exception as e:
         st.error(f"Error generating HTML summary: {e}")
         return False
