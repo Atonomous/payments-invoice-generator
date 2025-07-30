@@ -36,3 +36,15 @@ date,person,amount,type,status,description,payment_method,reference_number,chequ
 2025-05-23,Rehmat Lawn Mover,1500000.0,i_paid,completed,Meezan Bank,cash,297570,,completed
 2025-05-09,Rehmat Lawn Mover,5000000.0,i_paid,completed,Faysal Bank,cheque,3090301000001477,received/given,completed
 2025-07-11,Rehmat Lawn Mover,2000000.0,i_paid,completed,Cash Paid to Husnain,cash,1200000,,completed
+2025-05-12,Barkat Trading Corporation,2900000.0,i_paid,completed,online,cash,Invoice -386511,,completed
+2025-05-17,Barkat Trading Corporation,500000.0,i_paid,completed,online,cash,Invoice -386631,,completed
+2025-05-30,Barkat Trading Corporation,3000000.0,i_paid,completed,online,cash,invoice -62548,,completed
+2025-06-02,Barkat Trading Corporation,5000000.0,i_paid,completed,52372188,cash,invoice - 386621,,completed
+2025-06-12,Rehmat Lawn Mover,5000000.0,i_paid,completed,Faysal Bank,cash,CA0000000012,,completed
+2025-06-14,Rehmat Lawn Mover,8000000.0,i_paid,completed,Faysal Bank,cash,CA0000000015,,completed
+2025-06-16,Rehmat Lawn Mover,8000000.0,i_paid,completed,Faysal Bank,cash,CA0000000016,,completed
+2025-06-21,Rehmat Lawn Mover,34000.0,i_paid,completed,on data,cash,invoice #BTC-386718,,completed
+2025-06-26,Rehmat Lawn Mover,6000000.0,i_paid,completed,Faysal Bank,cash,CA0000000019,,completed
+2025-06-27,Rehmat Lawn Mover,4000000.0,i_paid,completed,Faysal Bank,cash,CA00000000021,,completed
+2025-07-01,Rehmat Lawn Mover,4950000.0,i_paid,completed,Faysal Bank,cash,CA0000000020,,completed
+2025-07-18,Rehmat Lawn Mover,2500000.0,i_paid,completed,Faysal Bank,cash,0000000,,completed
