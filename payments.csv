@@ -41,7 +41,7 @@ date,person,amount,type,status,description,payment_method,reference_number,chequ
 2025-05-30,Barkat Trading Corporation,3000000.0,i_paid,completed,online,cash,invoice -62548,,completed
 2025-06-02,Barkat Trading Corporation,5000000.0,i_paid,completed,52372188,cash,invoice - 386621,,completed
 2025-06-12,Barkat Trading Corporation,5000000.0,i_paid,completed,Faysal Bank,cheque,CA0000000012,processing done,completed
-2025-06-14,Barkat Trading Corporation,8000000.0,i_paid,completed,Faysal Bank,cheque,CA0000000015,processing,completed
+2025-06-14,Barkat Trading Corporation,8000000.0,i_paid,completed,Faysal Bank,cheque,CA0000000015,processing done,completed
 2025-06-16,Barkat Trading Corporation,8000000.0,i_paid,completed,Faysal Bank,cheque,CA0000000016,processing,completed
 2025-06-21,Barkat Trading Corporation,34000.0,i_paid,completed,on data,cash,invoice #BTC-386718,,completed
 2025-06-26,Barkat Trading Corporation,6000000.0,i_paid,completed,Faysal Bank,cheque,CA0000000019,processing done,completed
