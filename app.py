@@ -381,7 +381,7 @@ def generate_html_summary(df):
                         <td>{row['expense_person']}</td>
                         <td>{row['expense_category']}</td>
                         <td>Rs. {row['expense_amount']:,.2f}</td>
-                        <td>{row['expense_quantity']:,.2f}</td>
+                        <td>{row['expense_quantity']:,.0f}</td> <!-- Changed to .0f for integer quantity -->
                         <td>Rs. {row['total_line_amount']:,.2f}</td>
                         <td>{row['expense_description'] if row['expense_description'] else '-'}</td>
                     </tr>
@@ -1297,8 +1297,8 @@ def generate_invoice_pdf(person_name, transactions_df, start_date=None, end_date
         pdf.set_font("Arial", "B", size=8)
         
         # Define column widths for PDF: Date, Ref No., Method, Description, Quantity, Type, Chq. Status, Amount, Line Total
-        # Total width 190 (20+20+20+35+15+15+25+20+20 = 190)
-        col_widths = [20, 20, 20, 35, 15, 15, 25, 20, 20] 
+        # Adjusted widths for better fit
+        col_widths = [20, 20, 20, 30, 15, 15, 25, 25, 25] # Total 195
 
         pdf.cell(col_widths[0], 10, "Date", 1, 0, 'L', 1)
         pdf.cell(col_widths[1], 10, "Ref. No.", 1, 0, 'L', 1)
@@ -1384,22 +1384,15 @@ def generate_invoice_pdf(person_name, transactions_df, start_date=None, end_date
         pdf.set_font("Arial", "B", size=14)
         pdf.set_text_color(0, 123, 255)
         
-        # Calculate the X position for "Total Amount:" to be aligned with the start of the "Description" column
-        # and the amount to be right-aligned with the end of the "Amount" column.
-        # This will make them appear on the same line.
-        
-        # The "Total Amount:" label should span from the start of the "Description" column
-        # up to the start of the "Line Total" column.
-        x_start_description_col = pdf.l_margin + col_widths[0] + col_widths[1] + col_widths[2]
-        pdf.set_x(x_start_description_col)
+        # Calculate the X position for the "Total Amount:" label
+        # It should start at the left margin, and span up to the start of the Line Total column.
+        total_label_span_width = sum(col_widths[:-1]) # Sum of all widths except the last one (Line Total)
 
-        # Print "Total Amount:" label, no newline (ln=0)
-        # The total width of the cells before the Line Total column is sum(col_widths[3:8])
-        total_label_span_width = col_widths[3] + col_widths[4] + col_widths[5] + col_widths[6] + col_widths[7]
-        pdf.cell(total_label_span_width, 10, "Total Amount:", 0, 0, 'R') # Right align label within its calculated span
+        pdf.set_x(pdf.l_margin) # Start from the left margin
+        pdf.cell(total_label_span_width, 10, "Total Amount:", 0, 0, 'R') # Right align label within its span
 
-        # Print the total amount, right-aligned, and then move to the next line (ln=1)
-        pdf.cell(col_widths[8], 10, f"Rs. {total_invoice_amount:,.2f}", 0, 1, 'R') # Use col_widths[8] for the final amount cell
+        # Print the total amount value in the last column's space
+        pdf.cell(col_widths[8], 10, f"Rs. {total_invoice_amount:,.2f}", 0, 1, 'R') # Right align value in the last column
         pdf.ln(20)
 
         os.makedirs(INVOICE_DIR, exist_ok=True)
@@ -1947,39 +1940,14 @@ with tab3:
                 st.warning("Quantity must be greater than 0.")
                 expense_validation_passed = False
             
-            payments_df_for_balance = pd.DataFrame()
-            if os.path.exists(CSV_FILE):
-                payments_df_for_balance = pd.read_csv(CSV_FILE, dtype={'reference_number': str}, keep_default_na=False)
-                payments_df_for_balance['amount'] = pd.to_numeric(payments_df_for_balance['amount'], errors='coerce').fillna(0.0)
-                payments_df_for_balance['person'] = payments_df_for_balance['person'].astype(str)
-                payments_df_for_balance['type'] = payments_df_for_balance['type'].astype(str).str.lower()
-
-            total_paid_to_this_client = payments_df_for_balance[
-                (payments_df_for_balance['type'] == 'i_paid') & 
-                (payments_df_for_balance['person'] == selected_client_final_for_expense)
-            ]['amount'].sum()
-
-            client_expenses_df = pd.DataFrame()
-            if os.path.exists(CLIENT_EXPENSES_FILE) and os.path.getsize(CLIENT_EXPENSES_FILE) > 0:
-                client_expenses_df = pd.read_csv(CLIENT_EXPENSES_FILE, dtype={'original_transaction_ref_num': str, 'expense_person': str}, keep_default_na=False)
-                client_expenses_df['expense_amount'] = pd.to_numeric(client_expenses_df['expense_amount'], errors='coerce').fillna(0.0)
-                client_expenses_df['expense_quantity'] = pd.to_numeric(client_expenses_df['expense_quantity'], errors='coerce').fillna(1.0)
-                client_expenses_df['total_line_amount'] = client_expenses_df['expense_amount'] * client_expenses_df['expense_quantity']
-                client_expenses_df['expense_person'] = client_expenses_df['expense_person'].astype(str)
-
-            spent_by_this_client = client_expenses_df[
-                client_expenses_df['expense_person'] == selected_client_final_for_expense
-            ]['total_line_amount'].sum() # Sum of total_line_amount
-
-            current_transaction_total = expense_amount * expense_quantity
-
-            if (spent_by_this_client + current_transaction_total) > total_paid_to_this_client:
-                st.warning(f"🚨 Total reported expenses (Rs. {spent_by_this_client + current_transaction_total:,.2f}) for {selected_client_final_for_expense} exceed the total amount paid to them (Rs. {total_paid_to_this_client:,.2f}). Remaining to be accounted for: Rs. {total_paid_to_this_client - spent_by_this_client:,.2f}")
-                expense_validation_passed = False
+            # Removed client expense validation:
+            # if (spent_by_this_client + current_transaction_total) > total_paid_to_this_client:
+            #     st.warning(f"🚨 Total reported expenses (Rs. {spent_by_this_client + current_transaction_total:,.2f}) for {selected_client_final_for_expense} exceed the total amount paid to them (Rs. {total_paid_to_this_client:,.2f}). Remaining to be accounted for: Rs. {total_paid_to_this_client - spent_by_this_client:,.2f}")
+            #     expense_validation_passed = False
             
-            if total_paid_to_this_client == 0:
-                st.warning(f"No money has been recorded as 'Paid to' {selected_client_final_for_expense} yet. Please add a corresponding 'I Paid' transaction first.")
-                expense_validation_passed = False
+            # if total_paid_to_this_client == 0:
+            #     st.warning(f"No money has been recorded as 'Paid to' {selected_client_final_for_expense} yet. Please add a corresponding 'I Paid' transaction first.")
+            #     expense_validation_passed = False
 
             if expense_validation_passed:
                 try:
@@ -2082,7 +2050,7 @@ with tab3:
                         'expense_date', 'expense_person', 'expense_category', 'expense_amount', 'expense_quantity', 'total_line_amount', 'expense_description'
                     ]].style.format({
                         'expense_amount': "Rs. {:,.2f}",
-                        'expense_quantity': "{:,.2f}", # Format quantity
+                        'expense_quantity': "{:,.0f}", # Format quantity
                         'total_line_amount': "Rs. {:,.2f}" # Format total line amount
                     }),
                     use_container_width=True,
@@ -2184,7 +2152,6 @@ with tab5:
             )
             all_transactions_df = clean_payments_data(all_transactions_df)
             
-            # For invoice, we need to merge with client_expenses to get quantity and calculate line total
             client_expenses_for_invoice = pd.DataFrame()
             if os.path.exists(CLIENT_EXPENSES_FILE) and os.path.getsize(CLIENT_EXPENSES_FILE) > 0:
                 client_expenses_for_invoice = pd.read_csv(CLIENT_EXPENSES_FILE, dtype={'original_transaction_ref_num': str, 'expense_person': str}, keep_default_na=False)
@@ -2192,30 +2159,14 @@ with tab5:
                 client_expenses_for_invoice['expense_quantity'] = pd.to_numeric(client_expenses_for_invoice['expense_quantity'], errors='coerce').fillna(1.0)
                 client_expenses_for_invoice['expense_person'] = client_expenses_for_invoice['expense_person'].astype(str)
             
-            # Filter transactions for the selected person and type 'i_paid'
             filtered_invoice_df = all_transactions_df[
                 (all_transactions_df['person'] == st.session_state['invoice_person_name']) &
                 (all_transactions_df['type'] == 'i_paid')
             ].copy()
 
-            # Merge filtered_invoice_df with client_expenses_for_invoice to get quantity
-            # We need a common key. Let's assume 'reference_number' in payments.csv can correspond to
-            # 'original_transaction_ref_num' in client_expenses.csv.
-            # If there's no direct link, we'll need to decide how to associate expenses with payments.
-            # For now, let's assume the client expenses are linked to the 'i_paid' transactions by person and date,
-            # or if a reference number is used, it should be the primary key.
-            # A simpler approach for invoice is to just list the 'i_paid' transactions and assume quantity is 1 unless specified.
-            # However, since the user explicitly asked for quantity in client expenses and then in invoice,
-            # it implies that the 'i_paid' transactions should somehow carry the quantity information.
-            # Let's add a placeholder for quantity in payments.csv if not explicitly added, and use that.
-            # For now, I'll default quantity to 1 if it's a payment transaction, and use the expense_quantity if it's a client expense.
-            # This is getting complicated. Let's simplify: the invoice is for the 'i_paid' transactions.
-            # If the user wants quantity on these, they should be added to the payments.csv directly or derived.
-            # For now, I will add a default quantity of 1 to the payments_df if no quantity column exists.
+            if 'expense_quantity' not in filtered_invoice_df.columns:
+                filtered_invoice_df['expense_quantity'] = 1.0 # Default to 1 for payments in invoice
             
-            if 'quantity' not in filtered_invoice_df.columns:
-                filtered_invoice_df['quantity'] = 1.0 # Default quantity for payments if not present
-
             # Conditionally display date inputs and filter based on invoice type
             if st.session_state['invoice_type'] == "Invoice for Date Range":
                 col_start_date, col_end_date = st.columns(2)
@@ -2238,49 +2189,30 @@ with tab5:
                         (filtered_invoice_df['date'] <= pd.to_datetime(st.session_state['invoice_end_date']))
                     ]
             
+            # This block should be outside the date range IF, but inside the main person IF
             if not filtered_invoice_df.empty:
-                # Add expense_quantity to filtered_invoice_df for display in invoice PDF
-                # This is a bit tricky as payments.csv doesn't have quantity directly.
-                # If the user wants quantity on the invoice, it implies the 'i_paid' transactions
-                # themselves should have a quantity.
-                # For now, I'll assume that for 'i_paid' transactions, the 'amount' is the total,
-                # and if a quantity is desired, it should be explicitly added to payments.csv.
-                # To make it work for the PDF, I will add a temporary 'expense_quantity' column to this dataframe.
-                
-                # Let's try to link client expenses to payments if possible, or default quantity to 1
-                # This is a simplification. A robust solution would involve a more explicit link or adding quantity to payments.csv
-                
-                # Create a temporary 'expense_quantity' column for the invoice display
-                # This assumes that if a quantity is desired on the invoice, it's either 1 or
-                # comes from the linked client expense.
-                # For simplicity, I'll add a 'quantity' column to the payments.csv if it doesn't exist,
-                # and default it to 1. This way, the invoice can always show a quantity.
-                
-                # Check if 'quantity' column exists in the main payments_df
-                # This part should ideally be in init_files or a data cleaning function
-                
-                # For now, let's just add it to filtered_invoice_df for display purposes in PDF
-                if 'expense_quantity' not in filtered_invoice_df.columns:
-                    filtered_invoice_df['expense_quantity'] = 1.0 # Default to 1 for payments in invoice
-                
                 filtered_invoice_df_display = prepare_dataframe_for_display(filtered_invoice_df)
                 filtered_invoice_df_display['original_index'] = filtered_invoice_df.index
                 
-                # Ensure 'expense_quantity' is available for display
                 if 'expense_quantity' not in filtered_invoice_df_display.columns:
-                    filtered_invoice_df_display['expense_quantity'] = 1.0 # Fallback for display
+                    filtered_invoice_df_display['expense_quantity'] = 1.0 
+
+                filtered_invoice_df_display['line_total_display'] = (
+                    filtered_invoice_df_display['amount'] * filtered_invoice_df_display['expense_quantity']
+                ).apply(lambda x: f"Rs. {x:,.2f}")
 
                 st.write("#### Transactions for Invoice")
                 st.dataframe(
                     filtered_invoice_df_display[[
-                        'original_index', 'formatted_date', 'amount_display', 'expense_quantity', 'type_display', 
+                        'original_index', 'formatted_date', 'amount_display', 'expense_quantity', 'line_total_display', 'type_display', 
                         'payment_method_display', 'cheque_status_display', 'reference_number_display', 
                         'transaction_status_display', 'description'
                     ]].rename(columns={
                         'original_index': 'ID',
                         'formatted_date': 'Date',
-                        'amount_display': 'Amount',
+                        'amount_display': 'Amount (Unit)', # Renamed for clarity
                         'expense_quantity': 'Quantity', # Display Quantity
+                        'line_total_display': 'Line Total', # Display Line Total
                         'type_display': 'Type',
                         'payment_method_display': 'Method',
                         'cheque_status_display': 'Cheque Status',
@@ -2291,11 +2223,13 @@ with tab5:
                     use_container_width=True,
                     hide_index=True
                 )
-            else:
+            else: # This is the correct else for 'if not filtered_invoice_df.empty:'
                 st.info("No 'I Paid' transactions found for the selected person and criteria.")
 
         except Exception as e:
             st.error(f"Error loading transactions for invoice: {e}")
+    else: # This is the correct else for 'if st.session_state['invoice_person_name'] != "Select...":'
+        st.info("Please select a person to view transactions for invoice.")
 
     if st.button("Generate PDF Invoice"):
         if st.session_state['invoice_person_name'] == "Select...":
@@ -2336,6 +2270,18 @@ try:
         )
         df_bal = clean_payments_data(df_bal)
 
+        # Calculate total client expenses for the sidebar
+        total_client_expenses_for_sidebar = 0.0
+        if os.path.exists(CLIENT_EXPENSES_FILE) and os.path.getsize(CLIENT_EXPENSES_FILE) > 0:
+            df_exp_sidebar = pd.read_csv(CLIENT_EXPENSES_FILE, dtype={'expense_amount': float, 'expense_quantity': float}, keep_default_na=False)
+            df_exp_sidebar['expense_amount'] = pd.to_numeric(df_exp_sidebar['expense_amount'], errors='coerce').fillna(0.0)
+            if 'expense_quantity' not in df_exp_sidebar.columns:
+                df_exp_sidebar['expense_quantity'] = 1.0
+            df_exp_sidebar['expense_quantity'] = pd.to_numeric(df_exp_sidebar['expense_quantity'], errors='coerce').fillna(1.0)
+            df_exp_sidebar['total_line_amount'] = df_exp_sidebar['expense_amount'] * df_exp_sidebar['expense_quantity']
+            total_client_expenses_for_sidebar = df_exp_sidebar['total_line_amount'].sum()
+
+
         if not df_bal.empty:
             df_bal['amount'] = pd.to_numeric(df_bal['amount'], errors='coerce').fillna(0.0)
             df_bal['type'] = df_bal['type'].astype(str).str.lower()
@@ -2349,8 +2295,9 @@ try:
             cheque_paid = df_bal[(df_bal['type'] == 'i_paid') & (df_bal['payment_method'] == 'cheque')]['amount'].sum()
 
             st.sidebar.metric("Total Received", f"Rs. {rec:,.2f}")
-            st.sidebar.metric("Total Paid", f"Rs. {paid:,.2f}")
-            st.sidebar.metric("Net Balance", f"Rs. {rec - paid:,.2f}", delta_color="inverse")
+            st.sidebar.metric("Total Paid (by me)", f"Rs. {paid:,.2f}")
+            st.sidebar.metric("Total Client Expenses", f"Rs. {total_client_expenses_for_sidebar:,.2f}")
+            st.sidebar.metric("Net Balance (Paid - Spent)", f"Rs. {paid - total_client_expenses_for_sidebar:,.2f}", delta_color="inverse")
 
             with st.sidebar.expander("Payment Methods"):
                 st.write("**Received**")
