@@ -50,6 +50,6 @@ date,person,amount,type,status,description,payment_method,reference_number,chequ
 2025-07-18,Barkat Trading Corporation,2500000.0,i_paid,completed,Faysal Bank,cheque,0000000,processing done,completed
 2025-05-06,Sammi Tensile Work,1000000.0,i_paid,completed,Online transfer to Meezan Bank,cash,363755,,completed
 2025-05-07,Sammi Tensile Work,1000000.0,i_paid,completed,Online transfer to Meezan Bank,cash,550101,,completed
-2025-07-20,Sammi Tensile Work,1000000.0,i_paid,completed,Online transfer to Meezan Bank,cash,432401,,completed
+2025-05-19,Sammi Tensile Work,1000000.0,i_paid,completed,Online transfer to Meezan Bank,cash,432401,,completed
 2025-07-25,Sammi Tensile Work,2000000.0,i_paid,completed,Online transfer to UBL,cash,504887,,completed
 2025-08-02,Faisalabad Light House,1000000.0,i_paid,completed,Inter Bank transfer,cash,FT252140P2FVNSV9,,completed
