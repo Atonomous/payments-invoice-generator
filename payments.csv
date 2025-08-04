@@ -54,3 +54,4 @@ date,person,amount,type,status,description,payment_method,reference_number,chequ
 2025-06-22,Sammi Tensile Work,2000000.0,i_paid,completed,Online transfer to UBL,cash,504887,,completed
 2025-08-02,Faisalabad Light House,1000000.0,i_paid,completed,Inter Bank transfer,cash,FT252140P2FVNSV9,,completed
 2025-08-02,Faisalabad Light House,560000.0,i_paid,completed,Advance,cash,887,,completed
+2025-06-30,Mujahid Lights Lahore,48750.0,i_paid,completed,online,cash,392638,,completed
