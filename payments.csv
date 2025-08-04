@@ -56,3 +56,4 @@ date,person,amount,type,status,description,payment_method,reference_number,chequ
 2025-08-02,Faisalabad Light House,560000.0,i_paid,completed,Advance,cash,887,,completed
 2025-06-30,Mujahid Lights Lahore,48750.0,i_paid,completed,online,cash,392638,,completed
 2025-04-15,Mujahid Lights Lahore,568000.0,i_paid,completed,online,cash,833159,,completed
+2025-04-30,Mujahid Lights Lahore,720000.0,i_paid,completed,online,cash,713638,,completed
