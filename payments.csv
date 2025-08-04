@@ -59,3 +59,4 @@ date,person,amount,type,status,description,payment_method,reference_number,chequ
 2025-04-30,Mujahid Lights Lahore,720000.0,i_paid,completed,online,cash,713638,,completed
 2025-05-10,Mujahid Lights Lahore,400000.0,i_paid,completed,Bank Alfa,cash,FT251300KB4BNR8N,,completed
 2025-05-13,Mujahid Lights Lahore,1200000.0,i_paid,completed,Meezan Bank,cash,104226,,completed
+2025-05-17,Mujahid Lights Lahore,1000000.0,i_paid,completed,Bank Alfa,cash,FT25370KWT2XWR3,,completed
