@@ -67,3 +67,6 @@ date,person,amount,type,status,description,payment_method,reference_number,chequ
 2025-06-13,Mujahid Lights Lahore,1000000.0,i_paid,completed,Bank Alfa,cash,FT251640TVX71SP,,completed
 2025-06-17,Mujahid Lights Lahore,279200.0,i_paid,completed,Ailled Bank,cash,290600,,completed
 2025-07-07,Mujahid Lights Lahore,186600.0,i_paid,completed,Meezan Bank,cash,167263,,completed
+2025-08-07,Ashraf electric bedon rd,500000.0,i_paid,completed,Bank Alfa,cash,FT252190WTLCWKZ7,,completed
+2025-07-08,Ashraf electric bedon rd,1000000.0,i_paid,completed,Bank AL Habib,cash,829692,,completed
+2025-07-21,Ashraf electric bedon rd,750000.0,i_paid,completed,Bank AL Habib,cash,429687,,completed
